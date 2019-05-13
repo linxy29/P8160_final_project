@@ -1,0 +1,222 @@
+---
+title: "Final Project"
+author: "Xinyi Lin"
+date: "5/7/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(truncnorm)
+```
+
+
+## Problem 1
+
+### Question 1
+
+First, we need to tidy data. As the day of year $x_{i,1}(t)$ and time $t$ are two variables in given model, we need to transform `time` into some suitable formats. As type of hurrican is categorical variables, we also need to transform it so that we can use it to predicet $Y_{i,j}(t+6)$. Normally, records are taken every 6 hour at 00:00:00, 06:00:00, 12:00:00 and 18:00:00. However, some records are taken at other timepoints. These records are ineffective as there are no records 6 hour before or after those timepoints to help train or test given models. Thus, we remove those observations.
+
+```{r}
+data1 = read.csv("./hurrican356.csv") %>% 
+  janitor::clean_names() %>% 
+  mutate(year = season,
+         date_hour = time) %>% 
+  separate(date_hour, into = c("date", "hour"), sep = " ") %>% 
+  filter(hour == "00:00:00)" | hour == "06:00:00)" | hour == "12:00:00)" | hour == "18:00:00)") %>% 
+  mutate(hour = str_replace(hour, ":00:00\\)", ""),
+         hour = as.numeric(hour),
+         date = str_replace(date, "\\(", ""),
+         date = yday(date),
+         nature = as.numeric(as.factor(nature))) %>% 
+  #mutate(longitude = -longitude) %>% 
+  #mutate(latitude = scale(latitude, center = F), neg_longitude = -scale(longitude, center = F)+0.5, wind_kt = scale(wind_kt, center = F), date = scale(date, center = F), year = scale(year, center = F)) %>% 
+  #mutate(yearmin = year - 1980, date = scale(date, center = F), neg_longitude = -longitude) %>% 
+  group_by(id) %>% 
+  mutate(delta1 = c(NA, diff(latitude)),
+         delta2 = c(NA, diff(longitude)),
+         delta3 = c(NA, diff(wind_kt))) %>% 
+  ungroup() %>% 
+  na.omit() %>% 
+  select(id, latitude, longitude, wind_kt, date, year, nature, delta1, delta2, delta3)
+  #select(id, latitude, neg_longitude, wind_kt, date, yearmin, nature, delta1, delta2, delta3)
+
+#data1$hour = as.factor(data1$hour)
+#head(data1)
+summary(data1)
+```
+
+Then, we randomely select 80% hurricanes.
+
+```{r}
+id = unique(data1$id)
+num_id = length(id)
+train_id = sample(id, 0.8*num_id)
+
+train_data = data1[which(data1$id %in% train_id),] %>% 
+  select(-id)
+```
+
+#### Gibbs sampling
+
+After that, we use Gibbs sampling to develop an MCMC algorithm.
+
+Let $\rho = (\rho_1, \rho_2, \rho_3)$. The posterior distribution of parameters given $Y$ when $\boldsymbol{\beta}, \rho, \Sigma^{-1}$ are independent:
+
+$$\begin{aligned}
+f(\boldsymbol{\beta},\rho_j,\Sigma^{-1}|Y) &= \frac{\prod f(Y_{i,j}(t+6)|\boldsymbol{\beta},\rho_j,\Sigma^{-1})\pi(\boldsymbol{\beta},\rho_j,\Sigma^{-1})}{f(Y_{i,j})}\\
+&= \frac{\prod f(Y_{i,j}(t+6)|\boldsymbol{\beta},\rho_j,\Sigma^{-1})\pi_1(\boldsymbol{\beta})\pi_2(\rho_j)\pi_3(\Sigma^{-1})}{f(Y_{i,j})}\\
+&\propto \prod f(Y_{i,j}(t+6)|\boldsymbol{\beta},\rho_j,\Sigma^{-1})\pi_1(\boldsymbol{\beta})\pi_2(\rho_j)\pi_3(\Sigma^{-1})
+\end{aligned}$$
+
+where $\pi_1,\pi_2,\pi_3$ are prior distribution of $\boldsymbol{\beta}, \rho_j, \Sigma^{-1}$.
+
+For $\boldsymbol{\beta}$:
+
+$$\begin{aligned}
+f(\boldsymbol{\beta}|\rho_j,\Sigma^{-1},Y) &= \frac{f(\boldsymbol{\beta},\rho_j,\Sigma^{-1}|Y)}{f(\rho_j,\Sigma^{-1}|Y)}\\
+&\propto f(\boldsymbol{\beta},\rho_j,\Sigma^{-1}|Y)
+\end{aligned}$$
+
+As $\boldsymbol{\beta}, \rho_j, \Sigma^{-1}$ are independent
+
+$$\begin{aligned}
+f(\boldsymbol{\beta}|\rho_j,\Sigma^{-1},Y)
+&\propto \prod f(Y_{i,j}(t+6)|\boldsymbol{\beta},\rho_j,\Sigma^{-1})\pi_1(\boldsymbol{\beta})\\
+&\propto \prod Y_{i,j}(t+6)\pi_1(\boldsymbol{\beta})
+\end{aligned}$$
+
+Similarly
+
+$$f(\Sigma^{-1}|\boldsymbol{\beta},\rho_j,Y_{i,j}) \propto \prod Y_{i,j}(t+6)\pi_3(\Sigma^{-1})$$
+
+$$f(\rho_j|\boldsymbol{\beta},\Sigma^{-1},Y_{i,j}) \propto \prod Y_{i,j}(t+6)\pi_2(\rho_j)$$
+
+In order to make calculation process easier and avoid values becoming too large during Gibbs sampling process, we make log-transformation for parameters.(Bayesian adaptive Markov chain Monte Carlo estimation of genetic parameters)
+
+$$f(\boldsymbol{\beta'}|\rho_j,\Sigma^{-1},Y) \propto \sum \log[Y_{i,j}(t+6)]+\log[\pi_1(\boldsymbol{\beta})]$$
+$$f(\Sigma^{-1'}|\boldsymbol{\beta},\rho_j,Y_{i,j}) \propto \sum \log[Y_{i,j}(t+6)]+\log[\pi_3(\Sigma^{-1})]$$
+
+$$f(\rho_j'|\boldsymbol{\beta},\Sigma^{-1},Y_{i,j}) \propto \sum \log[Y_{i,j}(t+6)]+\log[\pi_2(\rho_j)]$$
+
+and $\boldsymbol{\hat\beta} = E[\boldsymbol{\beta}] = \exp(E[\boldsymbol{\beta'}]), \hat\rho_j = E[\rho_j] = \exp(E[\rho_j']), \hat\Sigma = E[\Sigma] = \exp(E[\Sigma'])$.
+
+Coding process. First, we need to specify components
+
+```{r}
+# rho: 1*3 vector
+#rho = rtruncnorm(3, a=0, b=1, mean = 0.5, sd = 1/5)
+rho = rep(20,3)
+# epsilon: 1*3 vector
+set.seed(123)
+sigma = bayesm::rwishart(3,diag(0.1,3))$IW
+#rWishart(1,3,diag(0.1,3))
+means = c(0,0,0)
+epsilon = mvtnorm::rmvnorm(1, means, sigma)
+# beta: 1*18 vector, where beta_kj is the [6*(j-1)+(k+1)]th number.
+beta = mvtnorm::rmvnorm(1, rep(0,21), diag(1,21))
+```
+
+MCMC process.
+
+```{r}
+muit = function(obs, beta.=beta){
+  #x = c(1,obs[5:10])
+  x = c(1,obs[4:9])
+  beta_m = matrix(beta.,3)
+  mu = beta_m %*% x
+  #mu = beta_m %*% t(x)
+  return(mu)
+}
+
+log_Yit = function(obs, rho.=rho, epsilon.=epsilon, beta.=beta){
+  #y = obs[2:4]
+  y = obs[1:3]
+  mu = muit(obs, beta.)
+  ytplus = as.vector(mu) + rho.*y + epsilon.
+  #for (i in 1:3) {if(ytplus[i] <= 0) ytplus[i] == 1}
+  logy = log(ytplus)
+  return(sum(logy))
+}
+
+Yit = function(obs, rho.=rho, epsilon.=epsilon, beta.=beta){
+  #y = obs[2:4]
+  y = obs[1:3]
+  mu = muit(obs, beta.)
+  ytplus = as.vector(mu) + rho.*y + epsilon.
+  #ytplus = mu + rho.*y + epsilon.
+  return(prod(ytplus))
+}
+
+traintest = train_data[1:4000,]
+apply(train_data, 1, Yit)
+logytest = apply(train_data, 1, log_Yit)
+sum(na.omit(logytest))
+
+# without log
+Gibbs = function(data=train_data, niter=1000, rhostart=rho, epsilonstart=epsilon, betastart=beta){
+  # start status
+  rho = rhostart
+  epsilon = epsilonstart
+  beta = betastart
+  # start to iterate
+  for (i in 2:niter) {
+    rho_new = 
+  }
+}
+```
+
+```{r}
+x = function(obs) {
+  x = c(1,obs[4:9])
+  return(x)}
+```
+
+#### M-H algorithm
+
+## Problem 2
+
+```{r, message=FALSE}
+data2 = read_csv("./hurricanoutcome2.csv") %>% 
+  janitor::clean_names() %>% 
+  mutate(damage = str_replace(damage, "\\$", ""),
+         damage = as.numeric(damage)) %>% 
+  select(-hurrican_id)
+
+head(data2)
+```
+
+Lasso regression
+
+```{r}
+library(glmnet)
+# matrix of predictors (glmnet uses input matrix) 
+damagex = model.matrix(damage~.,data2)[,-c(2,3)]
+deathsx = model.matrix(deaths~.,data2)[,-c(2,3)]
+
+# for damage
+cv.lasso <- cv.glmnet(damagex, data2$damage, alpha = 1, lambda = exp(seq(-10, 20, length=200))) 
+cv.lasso$lambda.min
+plot(cv.lasso)
+plot(cv.lasso$glmnet.fit, xvar = "lambda", label=TRUE)
+
+predict(cv.lasso, s="lambda.min", type="coefficients")
+```
+
+## test
+
+```{r}
+x = 1:5
+# lag with n=1 and pad with NA (returns vector)
+shift <- function(x, n){
+  c(x[-(seq(n))], rep(NA, n))
+}
+
+shift(x, n=1)
+# lag with n=1 and 2, and pad with 0 (returns list)
+shift(x, n=1:2, fill=0, type="lag")
+```
+
