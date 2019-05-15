@@ -232,9 +232,9 @@ compMHstep = function(startpars, niter = 1000, rhoa, betaa, sigmaa){
 ```{r}
 # starting points of parameters
 startpars = list(rho = rho, beta = beta, sigma = sigma)
-rho_a = c(0.005,0.01,0.05)
+rho_a = c(0.005,0.005,0.01)
 sigma_a = rep(0.5, 6)
-beta_a = c(rep(0.01, 3), rep(0.001, 6), rep(0.005, 6), 0.01, rep(0.005, 5))
+beta_a = c(rep(0.01, 3), rep(0.0005, 2), 0.001, rep(0.0001, 3), rep(0.005,6), 0.01, rep(0.005, 5))
 ```
 
 ```{r}
@@ -247,9 +247,64 @@ stopCluster(cl)
 ```
 
 ```{r}
-MHresults = regularMHstep(startpars, niter = 10, rhoa = rho_a, betaa = beta_a, sigmaa = sigma_a)
+set.seed(123)
+MHresults = compMHstep(startpars, niter = 1000, rhoa = rho_a, betaa = beta_a, sigmaa = sigma_a)
 ```
 
+```{r}
+set.seed(123)
+niter = 1000
+rhoa = rho_a
+betaa = beta_a
+sigmaa = sigma_a
+beta_m = matrix(NA, niter, 21)
+rho_m = matrix(NA, niter, 3)
+sigma_m = matrix(NA, niter, 6)
+beta_m[1,] = startpars$beta
+rho_m[1,] = startpars$rho
+sigma_m[1,] = startpars$sigma
+#for(i in 2:niter) {
+for (i in 88:niter) {  
+  posbeta = beta_m[i-1,]
+  for (j in 1:21) {
+    curbeta = posbeta
+    posbeta[j] = posbeta[j] + runif(1,-1,1)*beta_a[j]
+    if (log(runif(1)) >= logdensity(beta.=posbeta, rho.=rho_m[i-1,], sigma.=sigma_m[i-1,]) - logdensity(beta.=curbeta, rho.=rho_m[i-1,], sigma.=sigma_m[i-1,])){
+      posbeta[j] = curbeta[j]
+    }
+    }
+  beta_m[i,] = posbeta
+  posrho = rho_m[i-1,]
+  for (j in 1:3) {
+    currho = posrho
+    posrho[j] = posrho[j] + runif(1,-1,1)*rho_a[j]
+    if (sum(ifelse(posrho<1, 0, 1))==0) {
+      if (log(runif(1)) >= logdensity(beta.=beta_m[i,], rho.=posrho, sigma.=sigma_m[i-1,]) - logdensity(beta.=beta_m[i,], rho.=currho, sigma.=sigma_m[i-1,])){
+        posrho[j] = rho_m[i-1,j]
+      }
+      }
+    else{
+      posrho[j] = rho_m[i-1,j]
+    }
+    }
+  rho_m[i,] = posrho
+  possigma = sigma_m[i-1,]
+  for (j in 1:6) {
+    cursigma = possigma
+    possigma[j] = possigma[j] + runif(1,-1,1)*sigma_a[j]
+    possigma_m = matrix(c(possigma[c(1:3)], possigma[2], possigma[c(4,5)], possigma[c(3,5)], possigma[6]), 3)
+    if (is.positive.definite(possigma_m)) {
+      if (log(runif(1)) >= logdensity(beta.=beta_m[i,], rho.=rho_m[i,], sigma.=possigma) - logdensity(beta.=beta_m[i,], rho.=rho_m[i,], sigma.=cursigma)){
+        possigma[j] = sigma_m[i-1,j]
+      }
+      }
+    else{
+      possigma[j] = sigma_m[i-1,j]
+    }
+    }
+  sigma_m[i,] = possigma
+  }
+```
 
 ```{r}
 uni_beta = rep(NA,21)
@@ -272,28 +327,28 @@ uni_rho
 ```
 
 ```{r}
-niter = 100
+niter = 1000
 beta_results = as.data.frame(MHresults$MHbeta) %>% 
   mutate(x = 1:niter) %>% 
   gather(key = beta, value = value, V1:V21) %>% 
   mutate(beta = str_replace(beta, "V", ""))
 beta_plot = ggplot(beta_results, aes(x = x, y = value, color = beta)) +
   geom_line()
-ggsave("beta_plot100.jpeg", beta_plot)
+ggsave("beta_plot1000.jpeg", beta_plot)
  
 rho_results = as.data.frame(MHresults$MHrho) %>% 
   mutate(x = 1:niter) %>% 
   gather(key = rho, value = value, V1:V3) 
 rho_plot = ggplot(rho_results, aes(x = x, y = value, color = rho)) +
   geom_line()
-ggsave("rho_plot100.jpeg", rho_plot)
+ggsave("rho_plot1000.jpeg", rho_plot)
 
 sigma_results = as.data.frame(MHresults$MHsigma) %>% 
   mutate(x = 1:niter) %>% 
   gather(key = sigma, value = value, V1:V6) 
 sigma_plot = ggplot(sigma_results, aes(x = x, y = value, color = sigma)) +
   geom_line()
-ggsave("sigma_plot100.jpeg", sigma_plot)
+ggsave("sigma_plot1000.jpeg", sigma_plot)
 ```
 
 
