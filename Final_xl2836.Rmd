@@ -95,6 +95,7 @@ Accept $\theta^{(t+1)} = \lambda$, else, set$\theta^{(t+1)} = \theta^{(t)}$.
 Starting points.
 
 ```{r}
+# Starting points
 set.seed(111)
 # rho: 1*3 vector
 #rho = rtruncnorm(3, a=0, b=1, mean = 0.5, sd = 1/5)
@@ -103,9 +104,6 @@ rho = rep(0.8, 3)
 sigma = bayesm::rwishart(3,diag(0.1,3))$IW
 sigma = c(sigma[1,], sigma[2,c(2,3)], sigma[3,3])
 sigma
-#rWishart(1,3,diag(0.1,3))
-#means = c(0,0,0)
-#epsilon = rmvnorm(1, means, sigma)
 #beta: 1*18 vector, where beta_kj is the [6*(j-1)+(k+1)]th number.
 #beta = rmvnorm(1, rep(0,21), diag(1,21))
 beta = rep(0.005,21)
@@ -114,6 +112,7 @@ beta = rep(0.005,21)
 Density function.
 
 ```{r}
+#Density function.
 # for each yi
 logdy = function(obs, beta, rho, sigma){
   x = c(1,obs[7:12])

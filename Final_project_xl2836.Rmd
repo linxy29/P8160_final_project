@@ -88,6 +88,10 @@ $$f_{Y_i(t+6)}(Y_i|\rho_j, \beta, \Sigma) = \frac{exp[-\frac{1}{2}(Y_i-\mu)^T\Si
 
 $$\pi(\theta) = \prod\frac{exp[-\frac{1}{2}(Y_i-\mu)^T\Sigma^{-1}(Y_i-\mu)]}{\sqrt{(2\pi)^k|\Sigma|}}\times\pi_1(\beta)\pi_2(\rho_1)\pi_3(\rho_2)\pi_4(\rho_3)\pi_5(\Sigma^{-1})$$
 
+where $\pi$ are corresponding density functions.
+
+$$\pi'(\theta) = \sum log[\frac{exp[-\frac{1}{2}(Y_i-\mu)^T\Sigma^{-1}(Y_i-\mu)]}{\sqrt{(2\pi)^k|\Sigma|}}]+log[\pi_1(\beta)]+log[\pi_2(\rho_1)]+log[\pi_3(\rho_2)]+log[\pi_4(\rho_3)]+log[\pi_5(\Sigma^{-1})]$$
+
 Let $\theta = (\beta,\rho_j,\Sigma)$, with probability
 
 $$\alpha(\lambda|\theta^{(t)}) = min \left\{ 1,\frac{\pi(\lambda)q(\theta^{(t)}|\lambda)}{\pi(\theta^{(t)})q(\lambda|\theta^{(t)})}\right\} = min \left\{ 1,\frac{\pi(\lambda)}{\pi(\theta^{(t)})}\right\}$$ when using random walks.
@@ -298,7 +302,7 @@ For rho, rho1 converged slow because bad starting point, rho2 and rho3 converged
 
 All sigmas converged, but some chains look like straight lines because changes of each candidate value are small.
 
-As the efficiency of my code is too low, I have no time find out the best a and starting points for each parameters.
+As the efficiency of my code is too low, I have no time find out the best a and starting point for each parameter.
 
 As most betas converged after 600 iterations, I average last 400 values as estimators of betas. I average last 500 values as estimators of rhos and sigmas for the same reason. Estimators of betas, sigmas and rhos are as following.
 
